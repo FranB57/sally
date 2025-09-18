@@ -1,11 +1,12 @@
-import math 
-from typing import Any 
-import httpx 
-import io 
-import pandas as pd 
-import zipfile 
+import math
+from typing import Any
+import httpx
+import io
+import pandas as pd
+import zipfile
 import json
 from mcp.server.fastmcp import FastMCP
+from google.transit import gtfs_realtime_pb2
 
 mcp = FastMCP("nyc_ferry_data")
 
@@ -71,22 +72,120 @@ def haversine(lat1, lon1, lat2, lon2):
 async def get_ferry_alerts():
     """Get real-time ferry service alerts"""
     data = await make_gtfs_requests(gtfs_alerts)
-    
+
     if is_error(data):
         return data
-    
-    # TODO: Parse protobuf real-time data
-    return {"raw_data": data["content"]}
+
+    try:
+        # Parse protobuf real-time data
+        feed = gtfs_realtime_pb2.FeedMessage()
+        feed.ParseFromString(data["content"])
+
+        alerts = []
+        for entity in feed.entity:
+            if entity.HasField('alert'):
+                alert = entity.alert
+
+                # Extract alert information
+                alert_info = {
+                    "id": entity.id,
+                    "cause": alert.cause if alert.HasField('cause') else None,
+                    "effect": alert.effect if alert.HasField('effect') else None,
+                    "header_text": "",
+                    "description_text": "",
+                    "affected_routes": [],
+                    "affected_stops": []
+                }
+
+                # Get header text (multiple languages possible)
+                if alert.header_text and alert.header_text.translation:
+                    for translation in alert.header_text.translation:
+                        if translation.language == "en" or not alert_info["header_text"]:
+                            alert_info["header_text"] = translation.text
+
+                # Get description text
+                if alert.description_text and alert.description_text.translation:
+                    for translation in alert.description_text.translation:
+                        if translation.language == "en" or not alert_info["description_text"]:
+                            alert_info["description_text"] = translation.text
+
+                # Get affected routes and stops
+                for informed_entity in alert.informed_entity:
+                    if informed_entity.HasField('route_id'):
+                        alert_info["affected_routes"].append(informed_entity.route_id)
+                    if informed_entity.HasField('stop_id'):
+                        alert_info["affected_stops"].append(informed_entity.stop_id)
+
+                alerts.append(alert_info)
+
+        return {"alerts": alerts, "count": len(alerts)}
+
+    except Exception as e:
+        return {"error": f"Failed to parse protobuf data: {str(e)}"}
 
 async def get_ferry_trip_updates():
     """Get real-time ferry trip updates"""
     data = await make_gtfs_requests(gtfs_real_time_updates)
-    
+
     if is_error(data):
         return data
-    
-    # TODO: Parse protobuf real-time data  
-    return {"raw_data": data["content"]} 
+
+    try:
+        # Parse protobuf real-time data
+        feed = gtfs_realtime_pb2.FeedMessage()
+        feed.ParseFromString(data["content"])
+
+        trip_updates = []
+        for entity in feed.entity:
+            if entity.HasField('trip_update'):
+                trip_update = entity.trip_update
+
+                # Extract trip information
+                trip_info = {
+                    "id": entity.id,
+                    "trip_id": trip_update.trip.trip_id if trip_update.trip.HasField('trip_id') else None,
+                    "route_id": trip_update.trip.route_id if trip_update.trip.HasField('route_id') else None,
+                    "start_date": trip_update.trip.start_date if trip_update.trip.HasField('start_date') else None,
+                    "schedule_relationship": trip_update.trip.schedule_relationship if trip_update.trip.HasField('schedule_relationship') else None,
+                    "vehicle_id": trip_update.vehicle.id if trip_update.HasField('vehicle') and trip_update.vehicle.HasField('id') else None,
+                    "timestamp": trip_update.timestamp if trip_update.HasField('timestamp') else None,
+                    "stop_time_updates": []
+                }
+
+                # Extract stop time updates (real-time arrival/departure info)
+                for stop_time_update in trip_update.stop_time_update:
+                    stop_update_info = {
+                        "stop_id": stop_time_update.stop_id if stop_time_update.HasField('stop_id') else None,
+                        "stop_sequence": stop_time_update.stop_sequence if stop_time_update.HasField('stop_sequence') else None,
+                        "schedule_relationship": stop_time_update.schedule_relationship if stop_time_update.HasField('schedule_relationship') else None
+                    }
+
+                    # Get arrival info if available
+                    if stop_time_update.HasField('arrival'):
+                        arrival = stop_time_update.arrival
+                        stop_update_info["arrival"] = {
+                            "delay": arrival.delay if arrival.HasField('delay') else None,
+                            "time": arrival.time if arrival.HasField('time') else None,
+                            "uncertainty": arrival.uncertainty if arrival.HasField('uncertainty') else None
+                        }
+
+                    # Get departure info if available
+                    if stop_time_update.HasField('departure'):
+                        departure = stop_time_update.departure
+                        stop_update_info["departure"] = {
+                            "delay": departure.delay if departure.HasField('delay') else None,
+                            "time": departure.time if departure.HasField('time') else None,
+                            "uncertainty": departure.uncertainty if departure.HasField('uncertainty') else None
+                        }
+
+                    trip_info["stop_time_updates"].append(stop_update_info)
+
+                trip_updates.append(trip_info)
+
+        return {"trip_updates": trip_updates, "count": len(trip_updates)}
+
+    except Exception as e:
+        return {"error": f"Failed to parse protobuf data: {str(e)}"} 
 
 async def get_nearby_ferry_stops(lat, lon, radius_km = 3):
     nearby_stops = []
@@ -124,11 +223,13 @@ async def find_ferry_stops_nearby(latitude: float, longitude: float, radius_km: 
 @mcp.tool()
 async def get_ferry_departures(stop_name_or_id: str):
     """
-    Get departure times for a specific ferry stop
+    Get departure times for a specific ferry stop with real-time updates
 
     Args:
         stop_name_or_id: Either the stop ID (like "87") or stop name (like "Wall St/Pier 11")
     """
+    from datetime import datetime, timezone
+
     # First, find the stop - either by ID or by name
     target_stop_id = None
     target_stop_info = None
@@ -149,10 +250,44 @@ async def get_ferry_departures(stop_name_or_id: str):
     if not target_stop_id:
         return f"Stop '{stop_name_or_id}' not found. Try a stop ID or partial name."
 
+    # Get real-time trip updates
+    trip_updates_response = await get_ferry_trip_updates()
+    real_time_data = {}
+
+    # Extract real-time data for this stop
+    if not is_error(trip_updates_response) and "trip_updates" in trip_updates_response:
+        for trip in trip_updates_response["trip_updates"]:
+            for stop_update in trip["stop_time_updates"]:
+                if stop_update["stop_id"] == target_stop_id:
+                    # Convert Unix timestamp to readable time if available
+                    arrival_time = None
+                    departure_time = None
+                    delay_minutes = None
+
+                    if stop_update.get("arrival") and stop_update["arrival"].get("time"):
+                        arrival_timestamp = stop_update["arrival"]["time"]
+                        arrival_time = datetime.fromtimestamp(arrival_timestamp, tz=timezone.utc).strftime("%H:%M")
+
+                    if stop_update.get("departure") and stop_update["departure"].get("time"):
+                        departure_timestamp = stop_update["departure"]["time"]
+                        departure_time = datetime.fromtimestamp(departure_timestamp, tz=timezone.utc).strftime("%H:%M")
+
+                    if stop_update.get("arrival") and stop_update["arrival"].get("delay"):
+                        delay_minutes = stop_update["arrival"]["delay"] // 60  # Convert seconds to minutes
+
+                    real_time_data[trip["trip_id"]] = {
+                        "route_id": trip["route_id"],
+                        "vehicle_id": trip["vehicle_id"],
+                        "arrival_time": arrival_time,
+                        "departure_time": departure_time,
+                        "delay_minutes": delay_minutes
+                    }
+
     # Build the departure information
     result = {
         "stop_name": target_stop_info["name"],
         "stop_id": target_stop_id,
+        "real_time_departures": list(real_time_data.values()) if real_time_data else [],
         "routes": []
     }
 
@@ -162,7 +297,7 @@ async def get_ferry_departures(stop_name_or_id: str):
             "route_id": route_id,
             "route_name": route_info["route_name"],
             "destinations": [],
-            "schedules": {
+            "static_schedules": {
                 "weekdays": route_info["schedule_patterns"]["weekdays"][:10],  # Show first 10 times
                 "weekends": route_info["schedule_patterns"]["weekends"][:10]
             }
