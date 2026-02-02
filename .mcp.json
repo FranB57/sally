@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "mta-subway": {
+      "command": "uv",
+      "args": ["run", "python", "mta.py"]
+    },
+    "citibikes": {
+      "command": "uv",
+      "args": ["run", "python", "citibikes.py"]
+    },
+    "nyc-ferry": {
+      "command": "uv",
+      "args": ["run", "python", "ferry_data.py"]
+    }
+  }
+}

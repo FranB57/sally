@@ -39,54 +39,16 @@ subway_lines_dict = {
     "SIR" :['SIR']
 }
 
-TRANSFER_STATIONS = {
-    611: {'lines': ['W', '3', 'Q', '1', 'E', 'S', '7', 'A', 'R', 'C', 'N', '2'], 'name': 'Times Sq-42 St/Port Authority Bus Terminal'},
-    617: {'lines': ['B', '4', '3', 'Q', 'R', 'D', 'N', '2', '5'], 'name': 'Atlantic Av-Barclays Ctr'},
-    602: {'lines': ['W', '4', '6', 'L', 'Q', 'R', 'N', '5'], 'name': '14 St-Union Sq'},
-    628: {'lines': ['4', 'Z', '3', 'A', 'C', '2', 'J', '5'], 'name': 'Fulton St'},
-    623: {'lines': ['W', 'Z', '6', 'Q', 'R', 'J', 'N'], 'name': 'Canal St'},
-    624: {'lines': ['W', '3', 'E', 'A', 'R', 'C', '2'], 'name': 'Chambers St/WTC/Park Place/Cortlandt St'},
-    601: {'lines': ['M', 'L', '3', '1', '2', 'F'], 'name': '14 St/6 Av'},
-    616: {'lines': ['M', 'E', '7', 'R', 'F'], 'name': 'Jackson Hts-Roosevelt Av/74 St-Broadway'},
-    606: {'lines': ['G', 'M', 'E', '7'], 'name': 'Court Sq-23 St'},
-    607: {'lines': ['B', 'M', 'W', 'Q', 'R', 'D', 'N', 'F'], 'name': '34 St-Herald Sq'},
-    613: {'lines': ['W', '4', '6', 'R', 'N', '5'], 'name': 'Lexington Av/59 St'},
-    614: {'lines': ['B', '1', 'A', 'C', 'D'], 'name': '59 St-Columbus Circle'},
-    609: {'lines': ['B', 'M', '7', 'D', 'F'], 'name': '42 St-Bryant Pk/5 Av'},
-    619: {'lines': ['B', 'M', '6', 'D', 'F'], 'name': 'Broadway-Lafayette St/Bleecker St'},
-    620: {'lines': ['4', '3', 'R', '2', '5'], 'name': 'Borough Hall/Court St'},
-    622: {'lines': ['4', 'Z', '6', 'J', '5'], 'name': 'Brooklyn Bridge-City Hall/Chambers St'},
-    167: {'lines': ['B', 'M', 'E', 'A', 'C', 'D', 'F'], 'name': 'W 4 St-Wash Sq'},
-    612: {'lines': ['6', 'M', 'E'], 'name': 'Lexington Av/51-53 Sts'},
-    621: {'lines': ['Z', 'L', 'A', 'J', 'C'], 'name': 'Broadway Junction'},
-    42: {'lines': ['B', 'Q', 'S'], 'name': 'Prospect Park'},
-    461: {'lines': ['N', 'W', '7'], 'name': 'Queensboro Plaza'},
-    604: {'lines': ['D', 'B', '4'], 'name': '161 St-Yankee Stadium'},
-    605: {'lines': ['A', '1', 'C'], 'name': '168 St-Washington Hts'},
-    635: {'lines': ['W', '1', 'R'], 'name': 'Whitehall St-South Ferry'},
-    636: {'lines': ['R', 'A', 'F', 'C'], 'name': 'Jay St-MetroTech'},
-    261: {'lines': ['M', 'R', 'E', 'F'], 'name': 'Forest Hills-71 Av'},
-    608: {'lines': ['R', 'F', 'G'], 'name': '4 Av-9 St'},
-    610: {'lines': ['4', '6', 'S', '7', '5'], 'name': 'Grand Central-42 St'},
-    618: {'lines': ['E', 'A', 'L', 'C'], 'name': '14 St/8 Av'},
-    625: {'lines': ['M', 'Z', 'F', 'J'], 'name': 'Delancey St-Essex St'},
-    626: {'lines': ['4', '3', 'S', '2', '5'], 'name': 'Franklin Av-Medgar Evers College/Botanic Garden'},
-    273: {'lines': ['M', 'E', 'R'], 'name': 'Queens Plaza'},
-    151: {'lines': ['D', 'B', 'A', 'C'], 'name': '145 St'},
-    153: {'lines': ['D', 'B', 'A', 'C'], 'name': '125 St'},
-    58: {'lines': ['D', 'N', 'Q', 'F'], 'name': 'Coney Island-Stillwell Av'},
-    277: {'lines': ['D', 'B', 'E'], 'name': '7 Av'},
-    278: {'lines': ['Z', 'E', 'J'], 'name': 'Jamaica Center-Parsons/Archer'},
-    279: {'lines': ['Z', 'E', 'J'], 'name': 'Sutphin Blvd-Archer Av-JFK Airport'},
-    337: {'lines': ['4', '3', '2', '5'], 'name': 'Nevins St'},
-    175: {'lines': ['G', 'A', 'C'], 'name': 'Hoyt-Schermerhorn Sts'},
-    225: {'lines': ['D', 'B', 'M', 'F'], 'name': '47-50 Sts-Rockefeller Ctr'},
-    9: {'lines': ['N', 'Q', 'W', 'R'], 'name': '57 St-7 Av'},
-    26: {'lines': ['B', 'Q', 'R'], 'name': 'DeKalb Av'},
-    32: {'lines': ['D', 'N', 'R'], 'name': '36 St'},
-    97: {'lines': ['M', 'Z', 'J'], 'name': 'Myrtle Av'},
-    101: {'lines': ['M', 'Z', 'J'], 'name': 'Marcy Av'},
-}
+def build_transfer_stations():
+    """Build transfer stations dict from STATIONS_BY_ID (stations with 2+ routes)."""
+    transfers = {}
+    for complex_id, info in STATIONS_BY_ID.items():
+        routes = info['Daytime Routes'].split()
+        if len(routes) >= 2:
+            transfers[complex_id] = {'lines': routes, 'name': info['Stop Name']}
+    return transfers
+
+TRANSFER_STATIONS = build_transfer_stations()
 
 def haversine(lat1, lon1, lat2, lon2):
     """
