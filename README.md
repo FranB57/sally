@@ -16,7 +16,7 @@ And Sally comes back with real options using live availability data:
 
 ![Sally suggesting Citi Bike and subway routes from Tompkins Square Park to Greenpoint](assets/sally_tompkins_to_greenpoint.jpeg)
 
-![Sally suggesting Citi Bike, subway, ferry routes from FiDi to Chelsea](assets/sally_fidi_to_chelsea.png)
+![Sally suggesting Citi Bike, subway, ferry routes from FiDi to Chelsea](assets/sally_fidi_to_chelsea.jpg)
 
 
 ## How it works
